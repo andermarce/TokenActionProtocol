@@ -15,7 +15,6 @@ import './Withdrawal.sol';
 /**
  * @title Implementation of Token Action Protocol.
  * @author Paul Bolhar <paul.bolhar@gmail.com>
- * @dev
  */
 contract TokenActionProtocol is ITAP, Ownable, Withdrawal
 {
@@ -33,7 +32,7 @@ contract TokenActionProtocol is ITAP, Ownable, Withdrawal
     mapping (address => uint256) public lastAccumulatedBalance; // address=>balance - storage known last user withdrawal balance
 
     /**
-        @dev Restriction by the time on user actions
+     *   @dev Restriction by the time on user actions.;
     */
     modifier isTime() {
         if(0 == lastWithdraw[msg.sender]) {
@@ -45,7 +44,7 @@ contract TokenActionProtocol is ITAP, Ownable, Withdrawal
     }
 
     /**
-        @dev Restriction by the time on user actions
+     *   @dev Restriction by the time on user actions.;
     */
     modifier isRightholder() {
         require(rightsOf(msg.sender) >= oneAction);
@@ -53,7 +52,7 @@ contract TokenActionProtocol is ITAP, Ownable, Withdrawal
     }
 
     /**
-        @dev Restriction by the time on user actions
+      *  @dev Restriction by the time on user actions.;
     */
     modifier isTokenHolder(address _recipient, uint256 _amount) {
         require(erc20.balanceOf(_recipient) >= _amount);
@@ -61,30 +60,57 @@ contract TokenActionProtocol is ITAP, Ownable, Withdrawal
     }
 
     /**
-        @dev Contract constructor
-        @param _token - erc20 supported token contract address
-        @param _minWithdrawTime -  minimal withdraw time, natural number from 1 to x, where x is 1 month
-        @param _minWithdrawalBalance - minimal withdrawal balance (set more then 100*10*10**9)
-        @param _confrimOwnership - third part trusted contract validator owner
+      *  @dev Contract constructor.;
+      *  @param _token - erc20 supported token contract address
+      *  @param _minWithdrawTime -  minimal withdraw time, natural number from 1 to x, where x is 1 month
+      *  @param _minWithdrawalBalance - minimal withdrawal balance (set more then 100*10*10**9)
+
     */
     constructor(
         address _token,
         uint256 _minWithdrawTime,
-        uint256 _minWithdrawalBalance,
-        address _confrimOwnership
+        uint256 _minWithdrawalBalance
     ) public {
-        require(_token != address(0) && _confrimOwnership != address(0));
+        require(_token != address(0) && contractValidator != address(0));
         erc20 = IERC20(_token);
         minWithdrawTime = _minWithdrawTime * 30 days; // default x * 1 month
-        minWithdrawalBalance = _minWithdrawalBalance;
-        issuanceTime = now;
         oneAction = 1*10**uint256(FIERC20(_token).decimals());
-        rightholders[msg.sender] = erc20.totalSupply(); // give all rights to owner
-        IConfOwner(_confrimOwnership).isTokenOwner(_token);
+        minWithdrawalBalance = _minWithdrawalBalance * oneAction; // equivalent 1 action
+        issuanceTime = now;
+    }
+
+    // state storage
+    bool internal validatorState = false;
+
+    // third part trusted contract validator
+    address public contractValidator;
+
+    // state modifier, prevent action issue, prevent not valid contract
+    modifier isValidatorSet() {
+        require(validatorState);
+        _;
+    }
+    
+    /**
+     * @dev Set validator contract
+    */
+    function setValidator(address _validator) public onlyOwner returns (bool) {
+        contractValidator = _validator;
+        return true;
     }
 
     /**
-        @dev count withdraw balance
+     * @dev Issue action on token owner balance
+     */
+    function issueAction() public isValidatorSet returns (bool) {
+        IConfOwner(contractValidator).isTokenOwner(_token);
+        _owner = msg.sender; // set valid owner
+        rightholders[msg.sender] = erc20.totalSupply(); // give all rights to owner
+        return true;
+    }
+
+    /**
+      *  @dev count withdraw balance.;
     */
     function _countWB() internal view returns (uint256) {
         uint256 diffBalance = getAccumulatedBalance().sub(lastAccumulatedBalance[msg.sender]);
@@ -109,9 +135,6 @@ contract TokenActionProtocol is ITAP, Ownable, Withdrawal
         return true;
     }
 
-    /**
-       @dev describe in interface
-    */
     function transferOfRights(address _to, uint256 _amount) public
     isRightholder // only owner of active can init transaction
     isTokenHolder(_to, _amount) // only holder of token can get rights
@@ -120,17 +143,11 @@ contract TokenActionProtocol is ITAP, Ownable, Withdrawal
         return _transferOfRights(_to, _amount);
     }
 
-    /**
-        @dev describe in interface
-     */
     function rightToTransfer(address _from, address _to, uint256 _amount) public returns (bool) {
         // not implimented
         return true;
     }
 
-    /**
-        @dev describe in interface
-    */
     function transferWithRights(address _to, uint256 _amount) public returns (bool) {
         if(transferOfRights(_to, _amount)) {
             erc20.transfer(_to, _amount);
@@ -140,16 +157,10 @@ contract TokenActionProtocol is ITAP, Ownable, Withdrawal
         }
     }
 
-    /**
-        @dev describe in interface
-    */
     function rightsOf(address rightholder) public view returns (uint256) {
         return rightholders[rightholder];
     }
 
-    /**
-        @dev describe in interface
-    */
     function getDividends() public
     isTime // no more than minimum time range
     isRightholder // only rightholder
@@ -157,7 +168,7 @@ contract TokenActionProtocol is ITAP, Ownable, Withdrawal
     {
         uint256 amount = _countWB();
         prepareWithdrawal(amount);
-        _update(); // upd withdraw time
+        _update();
         return true;
     }
 

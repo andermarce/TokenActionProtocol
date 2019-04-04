@@ -4,7 +4,7 @@ import '../Ownable.sol';
 import '../IOwnable.sol';
 
 /** @dev endless contract */
-contract ConfrimOwnership is Ownable {
+contract ConfirmOwnership is Ownable {
 
     mapping (address => mapping (address => bool)) private _owners_WL;
 
